@@ -4,19 +4,11 @@ from argparse import ArgumentParser
 from requests.exceptions import RequestException
 import logging
 
+import checks
+from exceptions import CheckFailed
+
 
 logger = logging.getLogger()
-
-
-class CheckFailed(Exception):
-    pass
-
-
-def check_redirect(site):
-    uri = site['uri']
-    response = requests.get(uri)
-    if response.url != site['redirect_uri']:
-        raise CheckFailed(uri)
 
 
 def format_errors_as_email_body(errors):
@@ -55,10 +47,20 @@ def main():
 
     for site_name in config.sections():
         site = config[site_name]
+        check_class = getattr(checks, site['check'])
+        checker = check_class(site)
+
+        uri = site['uri']
+        try:
+            response = requests.get(uri)
+        except RequestException as e:
+            logger.error(f'Site retrieval "{site_name}" failed: {repr(e)}')
+            failed_sites.append([site_name, e])
+            continue
 
         try:
-            check_redirect(site)
-        except (RequestException, CheckFailed) as e:
+            checker.check(response)
+        except CheckFailed as e:
             logger.error(f'Site check "{site_name}" failed: {repr(e)}')
             failed_sites.append([site_name, e])
 
