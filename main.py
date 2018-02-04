@@ -1,5 +1,6 @@
 import requests
 from configparser import ConfigParser
+from argparse import ArgumentParser
 from requests.exceptions import RequestException
 import logging
 
@@ -29,9 +30,26 @@ def format_errors_as_email_body(errors):
     return '\n'.join(strings)
 
 
+def get_argument_parser():
+    parser = ArgumentParser()
+    parser.add_argument(
+        '--config',
+        required=True,
+    )
+    parser.add_argument(
+        '--email-on-error',
+        help='''Sends a notification e-mail upon failure.
+        Recipients are specified in the config file.''',
+    )
+    return parser
+
+
 def main():
+    argument_parser = get_argument_parser()
+    options = argument_parser.parse_args()
+
     config = ConfigParser()
-    config.read('config.ini')
+    config.read(options.config)
 
     failed_sites = []
 
@@ -44,7 +62,7 @@ def main():
             logger.error(f'Site check "{site_name}" failed: {repr(e)}')
             failed_sites.append([site_name, e])
 
-    if failed_sites:
+    if failed_sites and options.email_on_error:
         email_body = format_errors_as_email_body(failed_sites)
 
         app_config = config['DEFAULT']
